@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/home/iflyings/VSCode/venv/tensorflow-venv python
 # -*- coding:utf-8 -*-
 # Author: iflyings
 import tensorflow as tf

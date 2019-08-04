@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/home/iflyings/VSCode/venv/tensorflow-venv python
 # -*- coding:utf-8 -*-
 # Author: iflyings
 import tensorflow as tf
@@ -65,10 +65,10 @@ class CnnNetwork:
         re1 = tf.reshape(pool4, [self.input_x.shape[0], -1])
 
         # 防止过拟合，加入dropout
-        #dropout = tf.layers.dropout(inputs=rel, rate=0.5)
+        dropout = tf.layers.dropout(inputs=re1, rate=0.5)
 
         # 全连接层
-        dense1 = tf.layers.dense(inputs=re1,
+        dense1 = tf.layers.dense(inputs=dropout,
                                 units=1024,
                                 activation=tf.nn.relu,
                                 kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),

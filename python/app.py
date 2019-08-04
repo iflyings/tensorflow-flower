@@ -1,119 +1,128 @@
-#!/usr/bin/env python
+#!/home/iflyings/VSCode/venv/tensorflow-venv python
 # -*- coding:utf-8 -*-
 # Author: iflyings
 import os
+import numpy as np
 import tensorflow as tf
 from recordres import RecordRes
 from imageres import ImageRes
 from cnnmodel import CnnModel
 from cnnnetwork import CnnNetwork
 
+image_width = 100
+image_heigh = 100
+batch_size = 20
+learning_rate = 0.001
+step_count = 5000
+image_path = './data'
+model_path = './model'
+
 # 传入参数：logits，网络计算输出值。labels，真实值，0或者1
 # 返回参数：loss，损失值
 def loss(logits, label_batches):
-    with tf.variable_scope('loss') as scope:
+    with tf.compat.v1.variable_scope('loss') as scope:
         # 使用交叉熵损失函数
         cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits=logits, labels=label_batches, name='xentropy_per_example')
-        loss = tf.reduce_mean(cross_entropy, name='loss')
-    return loss
+        return tf.reduce_mean(cross_entropy, name='loss')
 
 # 输入参数：loss。learning_rate，学习速率。
 # 返回参数：train_op，训练op，这个参数要输入sess.run中让模型去训练。
 def trainning(loss, learning_rate):
-    with tf.name_scope('optimizer'):
-        train_op = tf.train.RMSPropOptimizer(learning_rate, 0.9).minimize(loss)
-        #train_op = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
-        return train_op
-
+    with tf.compat.v1.variable_scope('optimizer'):
+        return tf.compat.v1.train.RMSPropOptimizer(learning_rate, 0.9).minimize(loss)
+        #return tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
 
 # 评价/准确率计算
 # 输入参数：logits，网络计算值。label_batches，标签，也就是真实值，在这里是0或者1。
 # 返回参数：accuracy，当前step的平均准确率，也就是在这些batch中多少张图片被正确分类了。
 def evaluation(logits, label_batches):
-    with tf.variable_scope('accuracy') as scope:
+    with tf.compat.v1.variable_scope('accuracy') as scope:
         correct = tf.nn.in_top_k(logits, label_batches, 1)
-        accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
-        return accuracy
+        return tf.reduce_mean(tf.cast(correct, tf.float32))
 
+def test(test_dataset, n_classes):
+    test_iterator = test_dataset.make_initializable_iterator()
 
-def test(image_arr):
-    with tf.Graph().as_default():
-        image = tf.cast(image_arr, tf.float32)
-        image = tf.image.per_image_standardization(image)
-        image = tf.reshape(image, [1, 28, 28, 3])
-        # print(image.shape)
-        p = deep_CNN(image, 1, N_CLASSES)
-        logits = tf.nn.softmax(p)
-        x = tf.placeholder(tf.float32, shape=[28, 28, 3])
-        saver = tf.train.Saver()
-        sess = tf.Session()
-        sess.run(tf.global_variables_initializer())
-        ckpt = tf.train.get_checkpoint_state(log_dir)
-        if ckpt and ckpt.model_checkpoint_path:
-            # print(ckpt.model_checkpoint_path)
-            saver.restore(sess, ckpt.model_checkpoint_path)
-            # 调用saver.restore()函数，加载训练好的网络模型
-            print('Loading success')
-        prediction = sess.run(logits, feed_dict={x: image_arr})
-        max_index = np.argmax(prediction)
-        print('预测的标签为：', max_index, lists[max_index])
-        print('预测的结果为：', prediction)
+    train_x = tf.placeholder(shape=[1,image_width,image_heigh,3],dtype=tf.float32)
+    cnnModel = CnnNetwork(train_x, n_classes)
+    test_logits = cnnModel.create()
+    test_logits = tf.reshape(test_logits, [n_classes])
+    test_predict = tf.nn.softmax(test_logits)
 
+    sess = tf.compat.v1.InteractiveSession()
+    sess.run(tf.compat.v1.global_variables_initializer())
+    sess.run(test_iterator.make_initializer(test_dataset))
+    #with tf.Graph().as_default():
+    saver = tf.compat.v1.train.Saver()
+    ckpt = tf.train.get_checkpoint_state(model_path)
+    if ckpt and ckpt.model_checkpoint_path:
+        print(ckpt.model_checkpoint_path)
+        saver.restore(sess, ckpt.model_checkpoint_path)
+    else:
+        print('can not find train model data')
+        return
 
-def train():
-    image_width = 100
-    image_heigh = 100
-    batch_size = 50
-    learning_rate = 2e-5
-    num_epochs = 20000
-    image_path = '/home/iflyings/VSCodeProjects/flower/data'
-    model_path = '/home/iflyings/VSCodeProjects/flower/model'
-
-    imageRes = ImageRes(image_path, batch_size = batch_size, image_width = image_width, image_height = image_heigh)
-    image_batch = imageRes.load()
-    # 训练
-    #cnnModel = CnnModel(image_batch[0], imageRes.n_classes)
-    cnnModel = CnnNetwork(image_batch[0], imageRes.n_classes)
-    train_logits = cnnModel.create()
-    train_loss = loss(train_logits, image_batch[1])
-    train_op = trainning(train_loss, learning_rate)
-    train_acc = evaluation(train_logits, image_batch[1])
-    # 这个是log汇总记录
-    summary_op = tf.summary.merge_all()
-
-    sess = tf.InteractiveSession()
-    sess.run(tf.global_variables_initializer())
-    sess.run(tf.compat.v1.local_variables_initializer())
-
-    train_writer = tf.compat.v1.summary.FileWriter(model_path, sess.graph)
-    saver = tf.compat.v1.train.Saver() # 产生一个saver来存储训练好的模型
-
-    coord = tf.train.Coordinator()# 创建一个线程协调器，用来管理之后在Session中启动的所有线程
-    threads = tf.train.start_queue_runners(sess=sess, coord=coord)# 启动QueueRunner, 此时文件名队列已经进队
+    print('loading train model data success')
+    acc_count = 0
     try:
-        # 执行MAX_STEP步的训练，一步一个batch
-        for epoch in range(num_epochs):
-            if coord.should_stop():
-                break
-            _, tra_acc, tra_loss = sess.run([train_op, train_acc, train_loss])
-        
-            if epoch % 100 == 0:
-                print('Step %d, train loss = %.2f, train accuracy = %.2f%%' % (epoch, tra_loss, tra_acc * 100.0))
-                summary_str = sess.run(summary_op)
-                train_writer.add_summary(summary_str, epoch)
-            # 保存训练好的模型
-            if epoch % (num_epochs / 10) == (num_epochs / 10) - 1:
-                checkpoint_path = os.path.join(model_path, 'thing.ckpt')
-                saver.save(sess, checkpoint_path, global_step=epoch)
+        for step in range(1000):
+            image, label = sess.run(test_iterator.get_next())
+            pred_y = sess.run([test_predict], feed_dict={ train_x:image })
+            pred_y = np.reshape(pred_y[0], -1)
+            pred_y = np.argmax(pred_y)
+            if pred_y == label:
+                acc_count = acc_count + 1
+            print('%03d 预测的标签为：%d,结果为：%d' % (step, pred_y, label))
     except tf.errors.OutOfRangeError:
-        print('Done training -- epoch limit reached')
-    finally:
-        coord.request_stop()# When done, ask the threads to stop.
-    coord.join(threads)
-
+        print('Done testing -- epoch limit reached')
+    print('预测的准确率为：%.02f' % (acc_count / (step + 1)))
     sess.close()
 
 
+def train(train_dataset,batch_size,n_classes,learning_rate):
+    train_iterator = train_dataset.make_initializable_iterator()
+    # 训练
+    train_x = tf.placeholder(shape=[batch_size,image_width,image_heigh,3],dtype=tf.float32)
+    train_y = tf.placeholder(shape=[batch_size],dtype=tf.int32)
+    #cnnModel = CnnModel(image_batch[0], imageRes.n_classes)
+    cnnModel = CnnNetwork(train_x, n_classes)
+    train_logits = cnnModel.create()
+    train_loss = loss(train_logits, train_y)
+    train_op = trainning(train_loss, learning_rate)
+    train_acc = evaluation(train_logits, train_y)
+    # 这个是log汇总记录
+    tf.summary.scalar('accuracy', train_acc)
+    tf.summary.scalar('loss', train_loss)
+    merged_summaries = tf.summary.merge_all()
+    
+    sess = tf.compat.v1.InteractiveSession()
+    sess.run(tf.compat.v1.global_variables_initializer())
+    sess.run(train_iterator.make_initializer(train_dataset))
+    train_writer = tf.compat.v1.summary.FileWriter(model_path, sess.graph)
+
+    saver = tf.compat.v1.train.Saver() # 产生一个saver来存储训练好的模型
+
+    try:
+        for step in range(1, step_count+1):
+            images, labels = sess.run(train_iterator.get_next())
+            feed_dict = { train_x:images, train_y:labels }
+            _, tra_acc, tra_loss = sess.run([train_op, train_acc, train_loss], feed_dict=feed_dict)
+            print('%03d 训练损失为：%.6f, 准确率为：%.2f%%' % (step, tra_loss, tra_acc * 100.0))
+            if step % 100 == 0:
+                summary = sess.run(merged_summaries, feed_dict=feed_dict)
+                train_writer.add_summary(summary=summary, global_step=step)
+                # 保存训练好的模型
+                checkpoint_path = os.path.join(model_path, 'thing.ckpt')
+                saver.save(sess, checkpoint_path, global_step=step)
+    except tf.errors.OutOfRangeError:
+        print('Done training -- epoch limit reached')
+    sess.close()
+
 if __name__ == '__main__':
-    train()
+    recordRes = RecordRes('./data', image_width=image_width, image_height=image_heigh, batch_size=batch_size)
+    recordRes.load_record()
+
+    #train(recordRes.train_dataset,batch_size,recordRes.n_classes,learning_rate)
+    print('训练完毕，开始测试。。。。。。')
+    test(recordRes.test_dataset, recordRes.n_classes)
