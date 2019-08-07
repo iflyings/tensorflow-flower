@@ -17,6 +17,7 @@ step_count = 5000
 image_path = './data'
 model_path = './model'
 
+#tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 # 传入参数：logits，网络计算输出值。labels，真实值，0或者1
 # 返回参数：loss，损失值
 def loss(logits, label_batches):
@@ -42,17 +43,16 @@ def evaluation(logits, label_batches):
         return tf.reduce_mean(tf.cast(correct, tf.float32))
 
 def test(test_dataset, n_classes):
-    test_iterator = test_dataset.make_initializable_iterator()
+    test_iterator = tf.compat.v1.data.make_one_shot_iterator(test_dataset)
+    next_element = test_iterator.get_next()
 
-    train_x = tf.placeholder(shape=[1,image_width,image_heigh,3],dtype=tf.float32)
-    cnnModel = CnnNetwork(train_x, n_classes)
-    test_logits = cnnModel.create()
+    cnn_model = CnnNetwork(next_element[0], 1, n_classes, False)
+    test_logits = cnn_model.create()
     test_logits = tf.reshape(test_logits, [n_classes])
     test_predict = tf.nn.softmax(test_logits)
 
     sess = tf.compat.v1.InteractiveSession()
     sess.run(tf.compat.v1.global_variables_initializer())
-    sess.run(test_iterator.make_initializer(test_dataset))
     #with tf.Graph().as_default():
     saver = tf.compat.v1.train.Saver()
     ckpt = tf.train.get_checkpoint_state(model_path)
@@ -68,7 +68,7 @@ def test(test_dataset, n_classes):
     try:
         for step in range(1000):
             image, label = sess.run(test_iterator.get_next())
-            pred_y = sess.run([test_predict], feed_dict={ train_x:image })
+            pred_y = sess.run(test_predict)
             pred_y = np.reshape(pred_y[0], -1)
             pred_y = np.argmax(pred_y)
             if pred_y == label:
@@ -81,36 +81,34 @@ def test(test_dataset, n_classes):
 
 
 def train(train_dataset,batch_size,n_classes,learning_rate):
-    train_iterator = train_dataset.make_initializable_iterator()
+    train_iterator = tf.compat.v1.data.make_one_shot_iterator(train_dataset)
+    next_element = train_iterator.get_next()
     # 训练
-    train_x = tf.placeholder(shape=[batch_size,image_width,image_heigh,3],dtype=tf.float32)
-    train_y = tf.placeholder(shape=[batch_size],dtype=tf.int32)
+    #train_x = tf.placeholder(shape=[batch_size,image_width,image_heigh,3],dtype=tf.float32)
+    #train_y = tf.placeholder(shape=[batch_size],dtype=tf.int32)
     #cnnModel = CnnModel(image_batch[0], imageRes.n_classes)
-    cnnModel = CnnNetwork(train_x, n_classes)
-    train_logits = cnnModel.create()
-    train_loss = loss(train_logits, train_y)
+    cnn_model = CnnNetwork(next_element[0], batch_size, n_classes, True)
+    train_logits = cnn_model.create()
+    train_loss = loss(train_logits, next_element[1])
     train_op = trainning(train_loss, learning_rate)
-    train_acc = evaluation(train_logits, train_y)
+    train_acc = evaluation(train_logits, next_element[1])
     # 这个是log汇总记录
     tf.summary.scalar('accuracy', train_acc)
     tf.summary.scalar('loss', train_loss)
     merged_summaries = tf.summary.merge_all()
-    
+    # 产生一个saver来存储训练好的模型
+    saver = tf.compat.v1.train.Saver()
+
     sess = tf.compat.v1.InteractiveSession()
     sess.run(tf.compat.v1.global_variables_initializer())
-    sess.run(train_iterator.make_initializer(train_dataset))
+
     train_writer = tf.compat.v1.summary.FileWriter(model_path, sess.graph)
-
-    saver = tf.compat.v1.train.Saver() # 产生一个saver来存储训练好的模型
-
     try:
         for step in range(1, step_count+1):
-            images, labels = sess.run(train_iterator.get_next())
-            feed_dict = { train_x:images, train_y:labels }
-            _, tra_acc, tra_loss = sess.run([train_op, train_acc, train_loss], feed_dict=feed_dict)
-            print('%03d 训练损失为：%.6f, 准确率为：%.2f%%' % (step, tra_loss, tra_acc * 100.0))
+            _, tra_acc, tra_loss = sess.run([train_op, train_acc, train_loss])
+            print('%03d 训练损失为：%.5f, 准确率为：%.2f%%' % (step, tra_loss, tra_acc * 100.0))
             if step % 100 == 0:
-                summary = sess.run(merged_summaries, feed_dict=feed_dict)
+                summary = sess.run(merged_summaries)
                 train_writer.add_summary(summary=summary, global_step=step)
                 # 保存训练好的模型
                 checkpoint_path = os.path.join(model_path, 'thing.ckpt')
@@ -120,9 +118,10 @@ def train(train_dataset,batch_size,n_classes,learning_rate):
     sess.close()
 
 if __name__ == '__main__':
-    recordRes = RecordRes('./data', image_width=image_width, image_height=image_heigh, batch_size=batch_size)
-    recordRes.load_record()
+    imageRes = ImageRes('./data', image_width=image_width, image_height=image_heigh, batch_size=batch_size)
 
-    #train(recordRes.train_dataset,batch_size,recordRes.n_classes,learning_rate)
+    tf.reset_default_graph()
+    train(imageRes.load_train_dataset(),batch_size,imageRes.n_classes,learning_rate)
     print('训练完毕，开始测试。。。。。。')
-    test(recordRes.test_dataset, recordRes.n_classes)
+    tf.reset_default_graph()
+    test(imageRes.load_test_dataset(), imageRes.n_classes)
