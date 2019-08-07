@@ -56,13 +56,9 @@ class CnnNetwork:
         with tf.compat.v1.variable_scope('conv3') as scope:
             conv3 = self.__conv_wrapper(pool2,filters=128,train=True)
             pool3 = self.__pool_wrapper(conv3)
-        # 第四个卷积层
-        with tf.compat.v1.variable_scope('conv4') as scope:
-            conv4 = self.__conv_wrapper(pool3,filters=128,train=True)
-            pool4 = self.__pool_wrapper(conv4)
 
         #dense0 = tf.reshape(pool4, [-1, 6 * 6 * 128])
-        flatten = tf.contrib.layers.flatten(pool4)
+        flatten = tf.contrib.layers.flatten(pool3)
         # 防止过拟合，加入dropout
         #re1 = tf.layers.dropout(inputs=re1, rate=0.5)
 
@@ -73,7 +69,7 @@ class CnnNetwork:
             dense2 = self.__dense_wrapper(dense1, 256)
         with tf.compat.v1.variable_scope('dense3') as scope:
             logits = self.__dense_wrapper(dense2, self.n_classes)
-            
+
         return logits
         ### 四个卷积层，两个全连接层，一个softmax层组成。
         ### 在每一层的卷积后面加入 batch_normalization, relu, 池化
