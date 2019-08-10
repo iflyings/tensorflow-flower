@@ -2,7 +2,6 @@
 # -*- coding:utf-8 -*-
 # Author: iflyings
 import os
-
 import numpy as np
 import tensorflow as tf
 

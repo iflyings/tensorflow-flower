@@ -107,3 +107,8 @@ venv.bak/
 /data
 /model
 **/.vscode
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tfrecords
