@@ -10,9 +10,9 @@ from cnnmodel import CnnModel
 from cnnnetwork import CnnNetwork
 from vgg16 import VGG16
 
-image_width = 224
-image_heigh = 224
-batch_size = 256
+image_width = 100
+image_heigh = 100
+batch_size = 100
 learning_rate = 0.01
 step_count = 50000
 image_path = './flowers'
@@ -84,7 +84,7 @@ def train(train_dataset,batch_size,n_classes,learning_rate):
     #train_x = tf.placeholder(shape=[batch_size,image_width,image_heigh,3],dtype=tf.float32)
     #train_y = tf.placeholder(shape=[batch_size],dtype=tf.int32)
     #cnnModel = CnnModel(image_batch[0], imageRes.n_classes)
-    cnn_model = VGG16(n_classes, True)
+    cnn_model = CnnModel(next_element[0], n_classes)
     train_logits = cnn_model.create(next_element[0])
     train_loss = loss(train_logits, next_element[1])
     train_op = trainning(train_loss, learning_rate)
